@@ -19,6 +19,7 @@ local defaults = require "st.zwave.defaults"
 local st_device = require "st.device"
 --- @type st.zwave.Driver
 local ZwaveDriver = require "st.zwave.driver"
+local Driver = require "st.driver"
 --- @type st.zwave.CommandClass
 local cc = require "st.zwave.CommandClass"
 --- @type st.zwave.CommandClass.Configuration
@@ -130,25 +131,25 @@ local driver_template = {
     }
   },
   sub_drivers = {
-    require("eaton-accessory-dimmer"),
-    require("inovelli-LED"),
-    require("dawon-smart-plug"),
-    require("inovelli-2-channel-smart-plug"),
-    require("zwave-dual-switch"),
-    require("eaton-anyplace-switch"),
-    require("fibaro-wall-plug-us"),
-    require("dawon-wall-smart-switch"),
-    require("zooz-power-strip"),
-    require("aeon-smart-strip"),
-    require("qubino-switches"),
-    require("fibaro-double-switch"),
-    require("fibaro-single-switch"),
-    require("eaton-5-scene-keypad"),
-    require("ecolink-switch"),
-    require("multi-metering-switch"),
-    require("zooz-zen-30-dimmer-relay"),
-    require("multichannel-device"),
-    require("aeotec-smart-switch")
+    Driver.lazy_load_subdriver(require("eaton-accessory-dimmer")),
+    Driver.lazy_load_subdriver(require("inovelli-LED")),
+    Driver.lazy_load_subdriver(require("dawon-smart-plug")),
+    Driver.lazy_load_subdriver(require("inovelli-2-channel-smart-plug")),
+    Driver.lazy_load_subdriver(require("zwave-dual-switch")),
+    Driver.lazy_load_subdriver(require("eaton-anyplace-switch")),
+    Driver.lazy_load_subdriver(require("fibaro-wall-plug-us")),
+    Driver.lazy_load_subdriver(require("dawon-wall-smart-switch")),
+    Driver.lazy_load_subdriver(require("zooz-power-strip")),
+    Driver.lazy_load_subdriver(require("aeon-smart-strip")),
+    Driver.lazy_load_subdriver(require("qubino-switches")),
+    Driver.lazy_load_subdriver(require("fibaro-double-switch")),
+    Driver.lazy_load_subdriver(require("fibaro-single-switch")),
+    Driver.lazy_load_subdriver(require("eaton-5-scene-keypad")),
+    Driver.lazy_load_subdriver(require("ecolink-switch")),
+    Driver.lazy_load_subdriver(require("multi-metering-switch")),
+    Driver.lazy_load_subdriver(require("zooz-zen-30-dimmer-relay")),
+    Driver.lazy_load_subdriver(require("multichannel-device")),
+    Driver.lazy_load_subdriver(require("aeotec-smart-switch"))
   },
   lifecycle_handlers = {
     init = device_init,
