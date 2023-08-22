@@ -3,6 +3,7 @@ local HueApi = require "hue.api"
 local HueColorUtils = require "hue.cie_utils"
 local log = require "log"
 
+local cosock = require "cosock"
 local capabilities = require "st.capabilities"
 local st_utils = require "st.utils"
 
@@ -247,6 +248,7 @@ end
 ---@param light_device HueChildDevice
 local function do_refresh_light(driver, light_device)
   local light_resource_id = light_device:get_field(Fields.RESOURCE_ID)
+  local hue_device_id = light_device:get_field(Fields.HUE_DEVICE_ID)
   local bridge_id = light_device.parent_device_id or light_device:get_field(Fields.PARENT_DEVICE_ID)
   local bridge_device = driver:get_device_info(bridge_id)
 
@@ -265,28 +267,92 @@ local function do_refresh_light(driver, light_device)
   local success = false
   local count = 0
   local num_attempts = 3
+  local zigbee_resource_id
+  local rest_resp, rest_err
+  --- this loop is a rate-limit dodge.
+  ---
+  --- One of the various symptoms of hitting the Hue Bridge's rate limit is that you'll get a silent
+  --- failure that takes the form of the bridge returning the last valid response it replied with.
+  --- So we hit the bridge 2-3 times and check the IDs in the responses to verify that we're getting
+  --- the information for the light that we expect to getting the info for.
   repeat
-    local light_resp, err = hue_api:get_light_by_id(light_resource_id)
     count = count + 1
-    if err ~= nil then
-      log.error_with({ hub_logs = true }, err)
-    elseif light_resp ~= nil then
-      if #light_resp.errors > 0 then
-        for _, err in ipairs(light_resp.errors) do
+    rest_resp, rest_err = hue_api:get_device_by_id(hue_device_id)
+    if rest_err ~= nil then
+      log.error_with({ hub_logs = true }, rest_err)
+      goto continue
+    end
+
+    if rest_resp ~= nil then
+      if #rest_resp.errors > 0 then
+        for _, err in ipairs(rest_resp.errors) do
           log.error_with({ hub_logs = true }, "Error in Hue API response: " .. err.description)
         end
-      else
-        for _, light_info in ipairs(light_resp.data) do
-          if light_info.id == light_resource_id then
-            if light_info.color ~= nil and light_info.color.gamut then
-              light_device:set_field(Fields.GAMUT, light_info.color.gamut_type, { persist = true })
-            end
-            driver.emit_light_status_events(light_device, light_info)
-            success = true
+        goto continue
+      end
+
+      for _, hue_device in ipairs(rest_resp.data) do
+        for _, svc_info in ipairs(hue_device.services or {}) do
+          if svc_info.rtype == "zigbee_connectivity" then
+            zigbee_resource_id = svc_info.rid
           end
         end
       end
     end
+
+    if zigbee_resource_id ~= nil then
+      rest_resp, rest_err = hue_api:get_zigbee_connectivity_by_id(zigbee_resource_id)
+      if rest_err ~= nil then
+        log.error_with({ hub_logs = true }, rest_err)
+        goto continue
+      end
+
+      if rest_resp ~= nil then
+        if #rest_resp.errors > 0 then
+          for _, err in ipairs(rest_resp.errors) do
+            log.error_with({ hub_logs = true }, "Error in Hue API response: " .. err.description)
+          end
+          goto continue
+        end
+
+        for _, zigbee_svc in ipairs(rest_resp.data) do
+          if zigbee_svc.owner and zigbee_svc.owner.rid == hue_device_id then
+            if zigbee_svc.status and zigbee_svc.status == "connected" then
+              light_device.log.debug(string.format("Zigbee Status for %s is connected", light_device.label))
+              light_device:online()
+            else
+              light_device:offline()
+            end
+          end
+        end
+      end
+    end
+
+    rest_resp, rest_err = hue_api:get_light_by_id(light_resource_id)
+    if rest_err ~= nil then
+      log.error_with({ hub_logs = true }, rest_err)
+      goto continue
+    end
+
+    if rest_resp ~= nil then
+      if #rest_resp.errors > 0 then
+        for _, err in ipairs(rest_resp.errors) do
+          log.error_with({ hub_logs = true }, "Error in Hue API response: " .. err.description)
+        end
+        goto continue
+      end
+
+      for _, light_info in ipairs(rest_resp.data) do
+        if light_info.id == light_resource_id then
+          if light_info.color ~= nil and light_info.color.gamut then
+            light_device:set_field(Fields.GAMUT, light_info.color.gamut_type, { persist = true })
+          end
+          driver.emit_light_status_events(light_device, light_info)
+          success = true
+        end
+      end
+    end
+    ::continue::
   until success or count >= num_attempts
 end
 
@@ -323,7 +389,9 @@ end
 ---@param device HueDevice
 function handlers.refresh_handler(driver, device, cmd)
   if device:get_field(Fields.DEVICE_TYPE) == "bridge" then
-    do_refresh_all_for_bridge(driver, device --[[@as HueBridgeDevice]])
+    cosock.spawn(function()
+      do_refresh_all_for_bridge(driver, device --[[@as HueBridgeDevice]])
+    end, string.format("Refresh All Lights On Hue Bridge [%s] Task", device.label))
   elseif device:get_field(Fields.DEVICE_TYPE) == "light" then
     do_refresh_light(driver, device --[[@as HueChildDevice]])
   end
