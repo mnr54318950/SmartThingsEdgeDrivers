@@ -55,10 +55,16 @@ local function emit_light_status_events(light_device, light)
     if light.status then
       if light.status == "connected" then
         light_device:online()
+        light_device:set_field(Fields.IS_ONLINE, true)
       elseif light.status == "connectivity_issue" then
         light_device:offline()
+        light_device:set_field(Fields.IS_ONLINE, false)
         return
       end
+    end
+
+    if not light_device:get_field(Fields.IS_ONLINE) then
+      return
     end
 
     if light.mode then
@@ -681,6 +687,7 @@ light_added = function(driver, device, parent_device_id, resource_id)
 
   driver.light_id_to_device[device_light_resource_id] = device
 
+  device:set_field(Fields.IS_ONLINE, true)
   device:online()
   -- the refresh handler adds lights that don't have a fully initialized bridge to a queue.
   handlers.refresh_handler(driver, device)
@@ -751,8 +758,10 @@ local function do_bridge_network_init(driver, device, bridge_url, api_key)
               if status.status == "connected" then
                 child_device.log.trace("Marking Online after SSE Reconnect")
                 child_device:online()
+                child_device:set_field(Fields.IS_ONLINE, true)
               elseif status.status == "connectivity_issue" then
                 child_device.log.trace("Marking Offline after SSE Reconnect")
+                child_device:set_field(Fields.IS_ONLINE, false)
                 child_device:offline()
               end
             end
