@@ -63,7 +63,7 @@ local function emit_light_status_events(light_device, light)
       end
     end
 
-    if not light_device:get_field(Fields.IS_ONLINE) then
+    if light_device:get_field(Fields.IS_ONLINE) ~= true then
       return
     end
 
