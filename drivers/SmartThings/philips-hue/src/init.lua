@@ -687,6 +687,7 @@ light_added = function(driver, device, parent_device_id, resource_id)
 
   driver.light_id_to_device[device_light_resource_id] = device
 
+  -- the refresh handler adds lights that don't have a fully initialized bridge to a queue.
   handlers.refresh_handler(driver, device)
 end
 
