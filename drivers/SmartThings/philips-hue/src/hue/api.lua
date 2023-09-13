@@ -175,6 +175,8 @@ function PhilipsHueApi:update_connection(hub_base_url, api_key)
   self._ctrl_tx:send(msg)
 end
 
+---@return table|nil response REST response, nil if error
+---@return nil|string error nil on success
 local function do_get(instance, path)
   local reply_tx, reply_rx = channel.new()
   reply_rx:settimeout(10)
@@ -188,6 +190,8 @@ local function do_get(instance, path)
   return table.unpack(recv, 1, recv.n)
 end
 
+---@return table|nil response REST response, nil if error
+---@return nil|string error nil on success
 local function do_put(instance, path, payload)
   local reply_tx, reply_rx = channel.new()
   reply_rx:settimeout(10)
